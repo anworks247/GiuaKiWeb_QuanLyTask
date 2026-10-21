@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Quản lý Task</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+<style>
+body{background:#f1f4f9}.auth-bg{min-height:100vh;background:linear-gradient(135deg,#4f46e5,#06b6d4)}
+.stat-card{border:0;border-left:5px solid;transition:.2s}.stat-card:hover{transform:translateY(-3px)}
+.stat-card .num{font-size:2rem;font-weight:700}.task-done .t{text-decoration:line-through;color:#6c757d}
+</style></head><body>
+
+<!-- Đăng nhập / Đăng ký -->
+<div id="authView" class="auth-bg d-flex align-items-center justify-content-center p-3">
+  <div class="card shadow-lg border-0" style="max-width:400px;width:100%">
+    <div class="card-body p-4">
+      <div class="text-center mb-3"><i class="bi bi-check2-square text-primary" style="font-size:2.5rem"></i>
+        <h4 class="mb-0">Quản lý Task</h4><small class="text-muted" id="authTitle">Đăng nhập để tiếp tục</small></div>
+      <div class="mb-3 d-none" id="nameBox"><label class="form-label">Họ tên</label><input id="name" class="form-control"></div>
+      <div class="mb-3"><label class="form-label">Email</label><input id="email" type="email" class="form-control"></div>
+      <div class="mb-3"><label class="form-label">Mật khẩu</label><input id="password" type="password" class="form-control" placeholder="Tối thiểu 6 ký tự"></div>
+      <div class="alert alert-danger py-2 d-none" id="authErr"></div>
+      <button class="btn btn-primary w-100" id="authBtn">Đăng nhập</button>
+      <div class="text-center mt-3"><a href="#" id="toggle">Chưa có tài khoản? Đăng ký</a></div>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard -->
+<div id="appView" class="d-none">
+  <nav class="navbar navbar-dark bg-primary shadow-sm"><div class="container">
+    <span class="navbar-brand"><i class="bi bi-check2-square me-2"></i>Quản lý Task</span>
+    <div class="text-white"><i class="bi bi-person-circle me-1"></i><span id="who"></span>
+      <button class="btn btn-sm btn-light ms-3" id="logout"><i class="bi bi-box-arrow-right"></i> Đăng xuất</button></div>
+  </div></nav>
+  <div class="container py-4">
+    <div class="row g-3 mb-4" id="stats"></div>
+    <div class="card shadow-sm mb-4"><div class="card-body">
+      <form id="taskForm" class="row g-2">
+        <div class="col-md-5"><input id="title" class="form-control" placeholder="Bạn cần làm gì?" required></div>
+        <div class="col-6 col-md-2"><select id="priority" class="form-select"><option value="low">Ưu tiên thấp</option><option value="medium" selected>Ưu tiên vừa</option><option value="high">Ưu tiên cao</option></select></div>
+        <div class="col-6 col-md-3"><input id="due" type="date" class="form-control"></div>
+        <div class="col-md-2"><button class="btn btn-primary w-100"><i class="bi bi-plus-lg"></i> Thêm</button></div>
+      </form></div></div>
+    <div class="card shadow-sm">
+      <div class="card-header bg-white d-flex justify-content-between align-items-center">
+        <strong>Danh sách công việc</strong>
+        <select id="filter" class="form-select form-select-sm w-auto"><option value="">Tất cả</option><option value="todo">Cần làm</option><option value="doing">Đang làm</option><option value="done">Hoàn thành</option></select>
+      </div>
+      <ul class="list-group list-group-flush" id="list"></ul>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+const API = '/api';
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const ST = {todo:['Cần làm','secondary'],doing:['Đang làm','warning'],done:['Hoàn thành','success']};
+const PR = {low:['Thấp','info'],medium:['Vừa','primary'],high:['Cao','danger']};
+let token = localStorage.getItem('token'), isRegister = false;
+
+async function api(path, method = 'GET', body) {
+  const res = await fetch(API + path, { method,
+    headers: { 'Content-Type': 'application/json', ...(token && { Authorization: 'Bearer ' + token }) },
+    body: body && JSON.stringify(body) });
+  if (res.status === 401 && token) { logout(); throw new Error('Phiên đăng nhập đã hết hạn'); }
+  if (res.status === 204) return null;
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Có lỗi xảy ra');
+  return data;
+}
+function show() {
+  $('authView').classList.toggle('d-none', !!token);
+  $('appView').classList.toggle('d-none', !token);
+  if (token) { $('who').textContent = localStorage.getItem('userName') || ''; load(); }
+}
+function logout() { localStorage.clear(); token = null; show(); }
+$('logout').onclick = logout;
+$('toggle').onclick = e => { e.preventDefault(); isRegister = !isRegister;
+  $('nameBox').classList.toggle('d-none', !isRegister);
+  $('authBtn').textContent = isRegister ? 'Đăng ký' : 'Đăng nhập';
+  $('authTitle').textContent = isRegister ? 'Tạo tài khoản mới' : 'Đăng nhập để tiếp tục';
+  $('toggle').textContent = isRegister ? 'Đã có tài khoản? Đăng nhập' : 'Chưa có tài khoản? Đăng ký'; };
+$('authBtn').onclick = async () => {
+  try {
+    const d = await api(isRegister ? '/auth/register' : '/auth/login', 'POST',
+      { name: $('name').value, email: $('email').value, password: $('password').value });
+    token = d.token; localStorage.setItem('token', token); localStorage.setItem('userName', d.user.name);
+    $('authErr').classList.add('d-none'); show();
+  } catch (e) { $('authErr').textContent = e.message; $('authErr').classList.remove('d-none'); }
+};
+async function load() {
+  try {
+    const f = $('filter').value;
+    const [s, tasks] = await Promise.all([api('/stats'), api('/tasks' + (f ? '?status=' + f : ''))]);
+    const cards = [['Tổng task', s.total, '#4f46e5', 'list-task'], ['Cần làm', s.todo, '#6c757d', 'circle'],
+      ['Đang làm', s.doing, '#ffc107', 'hourglass-split'], ['Hoàn thành', s.done, '#198754', 'check-circle'], ['Quá hạn', s.overdue, '#dc3545', 'exclamation-triangle']];
+    $('stats').innerHTML = cards.map(([l, n, c, i]) => `<div class="col-6 col-md"><div class="card stat-card shadow-sm" style="border-left-color:${c}">
+      <div class="card-body d-flex justify-content-between align-items-center"><div><div class="text-muted small">${l}</div><div class="num">${n}</div></div>
+      <i class="bi bi-${i}" style="font-size:1.8rem;color:${c}"></i></div></div></div>`).join('');
+    const today = new Date().toISOString().slice(0, 10);
+    $('list').innerHTML = tasks.length ? tasks.map(t => {
+      const due = t.due_date ? t.due_date.slice(0, 10) : '', late = due && due < today && t.status !== 'done';
+      return `<li class="list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2 ${t.status === 'done' ? 'task-done' : ''}">
+        <div><div class="t fw-semibold">${esc(t.title)}</div>
+          <span class="badge text-bg-${PR[t.priority][1]}">${PR[t.priority][0]}</span>
+          ${due ? `<span class="badge ${late ? 'text-bg-danger' : 'text-bg-light border'}"><i class="bi bi-calendar-event"></i> ${esc(due)}</span>` : ''}</div>
+        <div class="d-flex gap-2"><select data-id="${t.id}" class="st form-select form-select-sm">${Object.entries(ST).map(([v, [lb]]) => `<option value="${v}" ${v === t.status ? 'selected' : ''}>${lb}</option>`).join('')}</select>
+          <button class="btn btn-sm btn-outline-danger" data-del="${t.id}"><i class="bi bi-trash"></i></button></div></li>`;
+    }).join('') : '<li class="list-group-item text-center text-muted py-4"><i class="bi bi-inbox fs-3 d-block"></i>Chưa có task nào</li>';
+  } catch (e) { alert(e.message); }
+}
+$('taskForm').onsubmit = async e => { e.preventDefault();
+  try { await api('/tasks', 'POST', { title: $('title').value, priority: $('priority').value, due_date: $('due').value || null });
+    e.target.reset(); load(); } catch (err) { alert(err.message); } };
+$('list').onchange = async e => { if (e.target.classList.contains('st')) { await api('/tasks/' + e.target.dataset.id, 'PUT', { status: e.target.value }); load(); } };
+$('list').onclick = async e => { const b = e.target.closest('[data-del]'); if (b && confirm('Xóa task này?')) { await api('/tasks/' + b.dataset.del, 'DELETE'); load(); } };
+$('filter').onchange = load;
+show();
+</script></body></html>
