@@ -4,14 +4,40 @@ const { Pool } = require('pg'), bcrypt = require('bcryptjs'), jwt = require('jso
 require('pg').types.setTypeParser(1082, v => v); // DATE giữ nguyên chuỗi YYYY-MM-DD
 const app = express();
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const allowedOrigins = new Set(
+  (process.env.CORS_ORIGINS || 'http://localhost:8080')
+    .split(',')
+    .map(origin => origin.trim())
+    .filter(Boolean)
+);
+
 app.use((req, res, next) => {
-  res.set({ 'Access-Control-Allow-Origin': process.env.CORS_ORIGIN || '*',
+  const origin = req.get('Origin');
+  if (origin && allowedOrigins.has(origin)) {
+    res.set('Access-Control-Allow-Origin', origin);
+    res.vary('Origin');
+  }
+  res.set({
     'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS' });
-  if (req.method === 'OPTIONS') return res.sendStatus(204);
+    'Access-Control-Allow-Methods': 'GET,POST,PUT,DELETE,OPTIONS'
+  });
+  if (req.method === 'OPTIONS') {
+    if (origin && !allowedOrigins.has(origin)) return res.sendStatus(403);
+    return res.sendStatus(204);
+  }
   next();
 });
 app.use(express.json());
+app.get('/api/health', async (req, res) => {
+  try {
+    await pool.query('SELECT 1');
+    res.status(200).json({ status: 'ok', database: 'ok' });
+  } catch (error) {
+    console.error('Health check failed:', error.code || 'database unavailable');
+    res.status(503).json({ status: 'error', database: 'unavailable' });
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 const sign = u => jwt.sign({ id: u.id }, process.env.JWT_SECRET, { expiresIn: '7d' });
@@ -95,4 +121,6 @@ app.get('/api/stats', auth, wrap(async (req, res) => {
   res.json(rows[0]);
 }));
 
-app.listen(process.env.PORT || 3000, () => console.log('Server chạy tại http://localhost:' + (process.env.PORT || 3000)));
+const port = Number(process.env.PORT) || 3000;
+const host = process.env.HOST || '0.0.0.0';
+app.listen(port, host, () => console.log('Server listening on ' + host + ':' + port));

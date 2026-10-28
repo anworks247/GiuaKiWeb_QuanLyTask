@@ -1,31 +1,35 @@
 # Web quản lý Task
 
-## Task 1 – Phân tích & thiết kế
-**Chức năng:** đăng ký/đăng nhập (JWT); CRUD task (tiêu đề, mô tả, trạng thái todo/doing/done, độ ưu tiên, hạn); lọc theo trạng thái; dashboard thống kê (tổng, theo trạng thái, quá hạn). Mỗi user chỉ thấy task của mình.
+## Chức năng và dữ liệu
+Ứng dụng quản lý task có đăng ký/đăng nhập JWT, CRUD task, lọc theo trạng thái và dashboard thống kê. Mỗi user chỉ xem task của mình. Schema PostgreSQL nằm ở schema.sql.
 
-**Database:** `users(id, name, email UNIQUE, password_hash, created_at)` 1—N `tasks(id, user_id FK, title, description, status, priority, due_date, created_at, updated_at)` — xem `schema.sql`.
+## API
+Các API task cần Bearer token, trừ đăng ký/đăng nhập và health check.
 
-**API** (kèm header `Authorization: Bearer <token>` trừ auth):
 | Method | Endpoint | Mô tả |
 |---|---|---|
-| POST | /api/auth/register | Đăng ký |
+| GET | /api/health | Kiểm tra API và kết nối PostgreSQL |
+| POST | /api/auth/register | Tạo tài khoản |
 | POST | /api/auth/login | Đăng nhập, trả token |
 | GET | /api/tasks?status= | Danh sách task |
-| GET | /api/tasks/:id | Chi tiết |
-| POST | /api/tasks | Tạo |
-| PUT | /api/tasks/:id | Cập nhật (từng phần) |
-| DELETE | /api/tasks/:id | Xóa |
-| GET | /api/stats | Số liệu dashboard |
+| GET | /api/tasks/:id | Chi tiết task |
+| POST | /api/tasks | Tạo task |
+| PUT | /api/tasks/:id | Cập nhật task |
+| DELETE | /api/tasks/:id | Xóa task |
+| GET | /api/stats | Thống kê dashboard |
 
-## Task 2 & 3 – Chạy dự án
-```bash
-npm install
-createdb taskdb && psql taskdb -f schema.sql
-cp .env.example .env   # sửa DATABASE_URL, JWT_SECRET
-npm start              # mở http://localhost:3000
-```
+## Yêu cầu và chạy local
+Cài Node.js LTS tương thích môi trường deploy và PostgreSQL. Tạo database taskdb, chạy schema.sql, copy .env.example thành .env rồi điền credentials riêng:
 
-## Giao diện Bootstrap + cấu hình PHP
-- `frontend/index.php` + `frontend/config.php`: giao diện Bootstrap 5, địa chỉ API đặt trong `config.php` (hoặc biến môi trường `API_BASE`).
-- Chạy: `npm start` (API, cổng 3000) rồi `php -S localhost:8080 -t frontend` và mở http://localhost:8080
-- Không có PHP: vẫn dùng được giao diện Bootstrap tại http://localhost:3000 (`public/index.html`).
+    npm ci
+    npm start
+
+Mặc định API và giao diện Node tĩnh chạy tại http://localhost:3000. Endpoint health trả HTTP 200 khi database hoạt động và 503 khi database chưa kết nối.
+
+Tùy chọn giao diện PHP local: chạy API bằng npm start, sau đó chạy PHP built-in server với document root frontend và đặt API_BASE trỏ tới API. Production VPS trong TV2 package hiện phục vụ giao diện public/index.html qua Node/Nginx; không cấu hình PHP nếu nhóm không chọn triển khai PHP.
+
+## Biến môi trường
+Xem .env.example để biết tên biến. Không commit .env; production credentials phải được đặt trong secret store hoặc file server có quyền hạn chế. CORS_ORIGINS là danh sách origin được phép gọi API từ trình duyệt, phân cách bằng dấu phẩy.
+
+## Triển khai
+TV2-Deployment-Package có runbook và cấu hình mẫu cho VPS Ubuntu + Nginx + PM2 + PostgreSQL. Xác nhận entry file, domain, port, secrets và database với cả TV1/TV2 trước khi chạy. Không dùng nguyên placeholder example.com hoặc REPLACE_* trên production.
